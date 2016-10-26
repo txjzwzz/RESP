@@ -52,7 +52,12 @@ class RedisClient(object):
 
     def send_command(self, *arguments):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((self.host, self.port))
+        try:
+            s.connect((self.host, self.port))
+        except socket.error as msg:
+            print str(msg)
+            s.close()
+            return
         s.sendall(RedisClient.request_format(*arguments))
         data = s.recv(65536)
         # print data
