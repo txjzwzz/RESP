@@ -2,6 +2,7 @@
 """
 redis client
 """
+import socket
 from resp_exceptions import ResponseTypeException, ProtocolArgLengthException
 from resp_buffer import ResponseBuffer
 
@@ -45,6 +46,19 @@ def phrase_response(response_buffer):
 
 class RedisClient(object):
 
+    def __init__(self, host='localhost', port=6379):
+        self.host = host
+        self.port = port
+
+    def send_command(self, *arguments):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((self.host, self.port))
+        s.sendall(RedisClient.request_format(*arguments))
+        data = s.recv(65536)
+        # print data
+        print RedisClient.resolve_response(data)
+        s.close()
+
     @staticmethod
     def request_format(*arguments):
         """
@@ -75,7 +89,14 @@ class RedisClient(object):
 
 
 if __name__ == '__main__':
-    print RedisClient.request_format('set', 'hello', 'word')
-    print RedisClient.resolve_response(':123\r\n')
-    print RedisClient.resolve_response('$6\r\nfoobar\r\n')
-    print RedisClient.resolve_response('*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n')
+    # print RedisClient.request_format('set', 'hello', 'word')
+    # print RedisClient.resolve_response(':123\r\n')
+    # print RedisClient.resolve_response('$6\r\nfoobar\r\n')
+    # print RedisClient.resolve_response('*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n')
+    rc = RedisClient()
+    rc.send_command('set', 'a', 'a1')
+    rc.send_command('del', 'a')
+    rc.send_command('sadd', 'a-set', 'a', 'b', 'c', 'd')
+    rc.send_command('smembers', 'a-set')
+    rc.send_command('smembers', 'b-set')
+    rc.send_command('del', 'a-set')
