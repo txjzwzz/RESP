@@ -34,3 +34,16 @@ class OutOfIndexException(Exception):
     def __init__(self, current_index, current_size):
         message = 'try to visit {}, but current size is {}'.format(current_index, current_size)
         super(OutOfIndexException, self).__init__(message)
+
+
+class TimeoutError(Exception):
+
+    def __init__(self):
+        message = 'socket time out'
+        super(TimeoutError, self).__init__(message)
+
+
+class ConnectionError(Exception):
+
+    def __init__(self, message):
+        super(ConnectionError, self).__init__(message)

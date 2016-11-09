@@ -3,7 +3,7 @@
 redis client
 """
 import socket
-from resp_exceptions import ResponseTypeException, ProtocolArgLengthException
+from resp_exceptions import ResponseTypeException, ProtocolArgLengthException, TimeoutError, ConnectionError
 from resp_buffer import ResponseBuffer
 
 
@@ -44,6 +44,27 @@ def phrase_response(response_buffer):
         raise ResponseTypeException(start_str)
 
 
+# from redis-py
+def b(x):
+    return x.encode('latin-1') if not isinstance(x, bytes) else x
+
+
+# from redis-py
+def encode(value):
+    "Return a bytestring representation of the value"
+    if isinstance(value, bytes):
+        return value
+    elif isinstance(value, (int, long)):
+        value = b(str(value))
+    elif isinstance(value, float):
+        value = b(repr(value))
+    elif not isinstance(value, basestring):
+        value = unicode(value)
+    if isinstance(value, unicode):
+        value = value.encode('utf-8')
+    return value
+
+
 class RedisClient(object):
 
     def __init__(self, host='localhost', port=6379):
@@ -59,10 +80,24 @@ class RedisClient(object):
             s.close()
             return
         s.sendall(RedisClient.request_format(*arguments))
-        data = s.recv(65536)
-        # print data
-        print RedisClient.resolve_response(data)
-        s.close()
+        data = list()
+        # read from socket code from redis-py in github
+        try:
+            while True:
+                data_str = s.recv(1024)
+                if isinstance(data_str, bytes) and len(data_str) == 0:
+                    raise socket.error("Server Closed Connection")
+                data.append(data_str)
+                if len(data_str) < 1024:
+                    break
+        except socket.timeout:
+            raise TimeoutError()
+        except socket.error as msg:
+            raise ConnectionError("Error while reading from socket {}".format(msg))
+        finally:
+            s.close()
+            data = ''.join(data)
+            return RedisClient.resolve_response(data)
 
     @staticmethod
     def request_format(*arguments):
@@ -73,12 +108,12 @@ class RedisClient(object):
         """
         request_format = ""
         count = 0
-        for argument in arguments:
+        for argument in map(encode, arguments):
             request_format += '${}\r\n'.format(len(argument))
             request_format += '{}\r\n'.format(argument)
             count += 1
         request_format = '*{}\r\n'.format(count) + request_format
-        return request_format
+        return request_format.encode('utf-8')
 
     @staticmethod
     def resolve_response(response_str):
@@ -99,9 +134,10 @@ if __name__ == '__main__':
     # print RedisClient.resolve_response('$6\r\nfoobar\r\n')
     # print RedisClient.resolve_response('*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n')
     rc = RedisClient()
-    rc.send_command('set', 'a', 'a1')
-    rc.send_command('del', 'a')
-    rc.send_command('sadd', 'a-set', 'a', 'b', 'c', 'd')
-    rc.send_command('smembers', 'a-set')
-    rc.send_command('smembers', 'b-set')
-    rc.send_command('del', 'a-set')
+    print rc.send_command('set', 'a', 'a1')
+    print rc.send_command('del', 'a')
+    print rc.send_command('sadd', 'a-set', 'a', 'b', 'c', 'd')
+    rc.send_command('sadd', 'a-set', *[i for i in xrange(1024)])
+    print rc.send_command('smembers', 'a-set')
+    print rc.send_command('smembers', 'b-set')
+    print rc.send_command('del', 'a-set')
